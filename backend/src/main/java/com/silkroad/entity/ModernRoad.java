@@ -48,6 +48,33 @@ public class ModernRoad {
     @Column(name = "corresponding_ancient_route_id")
     private Long correspondingAncientRouteId;
 
+    @Column(name = "road_number")
+    private String roadNumber;
+
+    @Column(name = "road_class")
+    private String roadClass;
+
+    @Column(name = "pavement_type")
+    private String pavementType;
+
+    @Column(name = "design_speed_kmh")
+    private Integer designSpeedKmh;
+
+    @Column(name = "lane_width_m")
+    private Double laneWidthM;
+
+    @Column(name = "admin_level")
+    private String adminLevel;
+
+    @Column(name = "total_length_km")
+    private Double totalLengthKm;
+
+    @Column(name = "opening_year")
+    private Integer openingYear;
+
+    @Column(name = "standard_name")
+    private String standardName;
+
     @Column(columnDefinition = "text")
     private String description;
 

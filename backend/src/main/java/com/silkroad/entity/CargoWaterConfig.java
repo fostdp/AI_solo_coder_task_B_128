@@ -51,6 +51,18 @@ public class CargoWaterConfig {
     @Column(name = "optimal_cargo_per_camel_kg")
     private Double optimalCargoPerCamelKg;
 
+    @Column(name = "camel_type_code")
+    private String camelTypeCode;
+
+    @Column(name = "base_speed_kmh")
+    private Double baseSpeedKmh;
+
+    @Column(name = "load_speed_decay_factor")
+    private Double loadSpeedDecayFactor;
+
+    @Column(name = "daily_distance_km")
+    private Double dailyDistanceKm;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

@@ -5,6 +5,29 @@ const VirtualCaravanPanel = {
     wsEventsSubscription: null,
     pollTimer: null,
     eventCache: [],
+    simulationSpeed: 1,
+    speedLevels: [
+        { value: 1, label: '慢速 1x', color: '#60a5fa' },
+        { value: 2, label: '正常 2x', color: '#4ade80' },
+        { value: 5, label: '快速 5x', color: '#fbbf24' },
+        { value: 10, label: '极速 10x', color: '#ef4444' }
+    ],
+    waypoints: [
+        { id: 1, name: '长安', lng: 108.94, lat: 34.26 },
+        { id: 2, name: '兰州', lng: 103.83, lat: 36.06 },
+        { id: 3, name: '武威', lng: 102.64, lat: 37.93 },
+        { id: 4, name: '张掖', lng: 100.45, lat: 38.93 },
+        { id: 5, name: '酒泉', lng: 98.50, lat: 39.73 },
+        { id: 6, name: '敦煌', lng: 94.66, lat: 40.14 },
+        { id: 7, name: '楼兰', lng: 89.95, lat: 40.56 }
+    ],
+    camelTypes: {
+        'BACTRIAN': { name: '双峰驼', speedKmh: 5.0, endurance: 85 },
+        'DROMEDARY': { name: '单峰驼', speedKmh: 6.5, endurance: 70 },
+        'HYBRID': { name: '杂交驼', speedKmh: 4.5, endurance: 90 },
+        'WILD_BACTRIAN': { name: '野双峰驼', speedKmh: 7.0, endurance: 75 },
+        'PACK_SMALL': { name: '小型驮队驼', speedKmh: 5.5, endurance: 80 }
+    },
     cargoNames: {
         'SILK': '丝绸', 'SPICE': '香料', 'JADE': '玉石', 'TEA': '茶叶',
         'PORCELAIN': '瓷器', 'HORSE': '马匹', 'GOLD_SILVER': '金银', 'GENERAL': '普通'
@@ -100,6 +123,14 @@ const VirtualCaravanPanel = {
                 <input type="number" class="form-control" id="vcCargoWeight" value="1500" min="100" max="50000">
             </div>
             <div class="form-group">
+                <label>骆驼种类</label>
+                <select class="form-control" id="vcCamelType">
+                    ${Object.entries(this.camelTypes).map(([code, info]) => 
+                        `<option value="${code}">${info.name} (${info.speedKmh}km/h)</option>`
+                    ).join('')}
+                </select>
+            </div>
+            <div class="form-group">
                 <label>骆驼数量</label>
                 <input type="number" class="form-control" id="vcCamelCount" value="12" min="1" max="200">
             </div>
@@ -189,6 +220,7 @@ const VirtualCaravanPanel = {
                 routeId: parseInt(document.getElementById('vcRouteSelect').value) || 1,
                 cargoType: document.getElementById('vcCargoType').value,
                 cargoWeightKg: parseFloat(document.getElementById('vcCargoWeight').value) || 1500,
+                camelType: document.getElementById('vcCamelType').value || 'BACTRIAN',
                 camelCount: parseInt(document.getElementById('vcCamelCount').value) || 10,
                 crewCount: parseInt(document.getElementById('vcCrewCount').value) || 5,
                 season: document.getElementById('vcSeason').value,
@@ -211,12 +243,16 @@ const VirtualCaravanPanel = {
     },
 
     createMockCaravan(name, captain) {
+        const camelType = document.getElementById('vcCamelType')?.value || 'BACTRIAN';
+        const camelInfo = this.camelTypes[camelType] || this.camelTypes.BACTRIAN;
         const caravan = {
             id: Date.now(),
             name: name,
             captainName: captain,
             routeId: parseInt(document.getElementById('vcRouteSelect').value) || 1,
             cargoType: document.getElementById('vcCargoType').value,
+            camelType: camelType,
+            camelSpeedKmh: camelInfo.speedKmh,
             status: 'PREPARING',
             progressPct: 0,
             distanceTraveledKm: 0,
@@ -229,6 +265,7 @@ const VirtualCaravanPanel = {
             foodTotalDays: 45,
             moralePct: 85,
             goldCoins: 1000,
+            currentWaypointIndex: 0,
             lng: 108.94,
             lat: 34.26
         };
@@ -387,13 +424,22 @@ const VirtualCaravanPanel = {
         const foodTotal = caravan.foodTotalDays || food || 1;
         const foodPct = Math.min(100, (food / foodTotal) * 100);
         const morale = Math.min(100, caravan.moralePct || 0);
+        const camelInfo = this.camelTypes[caravan.camelType] || this.camelTypes.BACTRIAN;
+        const baseSpeed = caravan.camelSpeedKmh || camelInfo.speedKmh || 5;
+        const currentSpeed = baseSpeed * this.simulationSpeed;
+        const remainingDist = Math.max(0, (caravan.totalDistanceKm || 1800) - (caravan.distanceTraveledKm || 0));
+        const remainingHours = currentSpeed > 0 ? remainingDist / currentSpeed : 0;
+        const remainingDays = Math.floor(remainingHours / 24);
+        const remainingHoursMod = Math.floor(remainingHours % 24);
+        const remainingMinutes = Math.floor((remainingHours % 1) * 60);
+        const nextWaypoint = this.waypoints[Math.min((caravan.currentWaypointIndex || 0) + 1, this.waypoints.length - 1)];
 
         div.innerHTML = `
             <div style="background:#0f172a;padding:12px;border-radius:6px;margin-bottom:12px;border-top:3px solid ${statusColor};">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <div>
                         <div style="font-size:1rem;font-weight:600;color:#e94560;">🐫 ${caravan.name || '驼队'}</div>
-                        <div style="font-size:0.75rem;color:#888;">队长: ${caravan.captainName || '-'}</div>
+                        <div style="font-size:0.75rem;color:#888;">队长: ${caravan.captainName || '-'} | 🐪 ${camelInfo.name}</div>
                     </div>
                     <span style="padding:4px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor};">
                         ${this.statusLabels[status] || status}
@@ -415,7 +461,7 @@ const VirtualCaravanPanel = {
                         <span>🚩 ${caravan.cargoType ? (this.cargoNames[caravan.cargoType] || caravan.cargoType) : ''}</span>
                     </div>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
                     <div style="background:#1a1a2e;padding:8px;border-radius:5px;">
                         <div style="display:flex;justify-content:space-between;font-size:0.7rem;margin-bottom:3px;">
                             <span style="color:#aaa;">💧 水量</span>
@@ -448,6 +494,42 @@ const VirtualCaravanPanel = {
                         <div style="font-size:1.1rem;color:#fbbf24;font-weight:700;">${(caravan.goldCoins || 0).toLocaleString()}</div>
                     </div>
                 </div>
+                <div style="background:#1a1a2e;padding:8px;border-radius:5px;margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="font-size:0.75rem;color:#e94560;font-weight:600;">⏱️ 预计剩余时间</div>
+                        <div style="font-size:0.8rem;color:#4ade80;font-weight:600;">
+                            ${remainingDays > 0 ? remainingDays + '天 ' : ''}${remainingHoursMod}小时${remainingMinutes}分
+                        </div>
+                    </div>
+                    <div style="font-size:0.7rem;color:#888;text-align:center;">
+                        当前速度: ${currentSpeed.toFixed(1)} km/h (${this.simulationSpeed}x)
+                    </div>
+                </div>
+                <div style="margin-bottom:10px;">
+                    <div style="font-size:0.75rem;color:#aaa;margin-bottom:6px;">⚡ 模拟速度</div>
+                    <div style="display:flex;gap:4px;">
+                        ${this.speedLevels.map(s => `
+                            <button class="speed-btn" data-speed="${s.value}"
+                                style="flex:1;padding:6px 4px;border:1px solid ${this.simulationSpeed === s.value ? s.color : '#3a3a5a'};
+                                    background:${this.simulationSpeed === s.value ? s.color + '20' : 'transparent'};
+                                    color:${this.simulationSpeed === s.value ? s.color : '#888'};
+                                    border-radius:4px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;">
+                                ${s.label}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+                <div style="display:flex;gap:6px;margin-bottom:10px;">
+                    ${status === 'TRAVELING' ? `
+                        <button class="btn btn-secondary" id="vcNextWaypointBtn" style="flex:1;font-size:0.75rem;">📍 下一驿站</button>
+                        <button class="btn btn-secondary" id="vcNextEventBtn" style="flex:1;font-size:0.75rem;">🎲 下一事件</button>
+                    ` : ''}
+                </div>
+                ${nextWaypoint ? `
+                    <div style="font-size:0.7rem;color:#888;text-align:center;padding:4px;background:#1a1a2e;border-radius:4px;">
+                        📍 下一站: ${nextWaypoint.name}
+                    </div>
+                ` : ''}
                 <div style="display:flex;gap:6px;">
                     ${status === 'PREPARING' ? `
                         <button class="btn btn-primary" id="vcStartBtn" style="flex:1;">▶️ 出发！</button>
@@ -471,6 +553,8 @@ const VirtualCaravanPanel = {
             </div>
         `;
         this.bindControlButtons(status);
+        this.bindSpeedButtons();
+        this.bindFastForwardButtons(status);
         this.renderEvents();
     },
 
@@ -574,6 +658,111 @@ const VirtualCaravanPanel = {
                 </div>
             `;
         }).join('');
+    },
+
+    bindSpeedButtons() {
+        const buttons = document.querySelectorAll('.speed-btn');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const speed = parseFloat(btn.dataset.speed);
+                this.setSimulationSpeed(speed);
+            });
+        });
+    },
+
+    setSimulationSpeed(speed) {
+        this.simulationSpeed = speed;
+        try {
+            if (API && typeof API.setCaravanSpeed === 'function' && this.currentCaravan) {
+                API.setCaravanSpeed(this.currentCaravan.id, speed);
+            }
+        } catch (e) {
+        }
+        if (this.currentCaravan) {
+            this.currentCaravan.simulationSpeed = speed;
+            this.renderCaravanStatus(this.currentCaravan);
+        }
+    },
+
+    bindFastForwardButtons(status) {
+        if (status !== 'TRAVELING') return;
+        const nextWpBtn = document.getElementById('vcNextWaypointBtn');
+        if (nextWpBtn) {
+            nextWpBtn.addEventListener('click', () => this.fastForwardToNextWaypoint());
+        }
+        const nextEventBtn = document.getElementById('vcNextEventBtn');
+        if (nextEventBtn) {
+            nextEventBtn.addEventListener('click', () => this.triggerRandomEvent());
+        }
+    },
+
+    fastForwardToNextWaypoint() {
+        if (!this.currentCaravan || this.currentCaravan.status !== 'TRAVELING') return;
+        const currentIdx = this.currentCaravan.currentWaypointIndex || 0;
+        const nextIdx = Math.min(currentIdx + 1, this.waypoints.length - 1);
+        if (nextIdx === currentIdx) {
+            this.addEvent({
+                id: Date.now(),
+                severity: 'INFO',
+                message: '已到达终点，没有下一个驿站了',
+                timestamp: new Date().toISOString()
+            });
+            return;
+        }
+        const nextWaypoint = this.waypoints[nextIdx];
+        const totalDist = this.currentCaravan.totalDistanceKm || 1800;
+        const progressPerWp = 100 / (this.waypoints.length - 1);
+        const newProgress = Math.min(100, (nextIdx) * progressPerWp);
+        this.currentCaravan.currentWaypointIndex = nextIdx;
+        this.currentCaravan.progressPct = newProgress;
+        this.currentCaravan.distanceTraveledKm = totalDist * newProgress / 100;
+        this.currentCaravan.daysElapsed = Math.floor(newProgress * 0.6);
+        this.currentCaravan.waterRemainingLiters = Math.max(0, this.currentCaravan.waterCapacityLiters - (newProgress * 45));
+        this.currentCaravan.foodRemainingDays = Math.max(0, 45 - newProgress * 0.5);
+        this.currentCaravan.lng = nextWaypoint.lng;
+        this.currentCaravan.lat = nextWaypoint.lat;
+        if (newProgress >= 100) this.currentCaravan.status = 'COMPLETED';
+        this.addEvent({
+            id: Date.now(),
+            severity: 'POSITIVE',
+            message: `快进抵达驿站: ${nextWaypoint.name}`,
+            timestamp: new Date().toISOString()
+        });
+        this.renderCaravanStatus(this.currentCaravan);
+        this.updateMapMarker(this.currentCaravan);
+    },
+
+    triggerRandomEvent() {
+        if (!this.currentCaravan) return;
+        const eventTypes = [
+            { severity: 'POSITIVE', messages: ['在绿洲补充了水源！士气提升', '商队交易成功，获得金币', '发现捷径，节省时间', '遇到友好商队，交换情报'] },
+            { severity: 'INFO', messages: ['经过重要补给点', '与另一支驼队相遇', '当地官员接见了商队', '发现有趣的风土人情'] },
+            { severity: 'WARNING', messages: ['遭遇沙尘暴，行进缓慢', '骆驼劳累，需要休整', '水源检测发现杂质', '道路崎岖，小心前行'] },
+            { severity: 'DANGER', messages: ['遭遇山贼袭击！损失部分货物', '骆驼生病，需要停留治疗', '暴雨冲毁路段，需绕道', '粮草受潮，部分损坏'] }
+        ];
+        const weights = [0.3, 0.4, 0.2, 0.1];
+        let rand = Math.random();
+        let typeIdx = 0;
+        for (let i = 0; i < weights.length; i++) {
+            if (rand < weights[i]) { typeIdx = i; break; }
+            rand -= weights[i];
+        }
+        const eventType = eventTypes[typeIdx];
+        const message = eventType.messages[Math.floor(Math.random() * eventType.messages.length)];
+        const sev = ['POSITIVE', 'INFO', 'WARNING', 'DANGER'][typeIdx];
+        if (sev === 'POSITIVE') {
+            this.currentCaravan.goldCoins = (this.currentCaravan.goldCoins || 0) + Math.floor(Math.random() * 100);
+            this.currentCaravan.moralePct = Math.min(100, (this.currentCaravan.moralePct || 80) + 5);
+        } else if (sev === 'DANGER') {
+            this.currentCaravan.moralePct = Math.max(10, (this.currentCaravan.moralePct || 80) - 10);
+        }
+        this.addEvent({
+            id: Date.now(),
+            severity: sev,
+            message: message,
+            timestamp: new Date().toISOString()
+        });
+        this.renderCaravanStatus(this.currentCaravan);
     }
 };
 

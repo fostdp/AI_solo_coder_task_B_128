@@ -24,4 +24,6 @@ public class CargoWaterSimulateRequest {
     private String terrainType;
 
     private Double temperatureC;
+
+    private String camelType;
 }

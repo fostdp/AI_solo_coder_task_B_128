@@ -39,5 +39,15 @@ public class DynastyRouteDTO {
 
     private Double culturalExchangeScore;
 
+    private Double evidenceStrength;
+
+    private String historicalSources;
+
+    private String archaeologicalNote;
+
+    private String routeQuality;
+
+    private Integer numArchaeologicalSites;
+
     private List<double[]> coordinates;
 }

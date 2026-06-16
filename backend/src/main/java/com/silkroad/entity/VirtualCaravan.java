@@ -60,6 +60,15 @@ public class VirtualCaravan {
     @Column(name = "camel_count")
     private Integer camelCount;
 
+    @Column(name = "camel_type")
+    private String camelType;
+
+    @Column(name = "speed_multiplier")
+    private Double speedMultiplier = 2.0;
+
+    @Column(name = "simulation_speed_mode")
+    private String simulationSpeedMode = "NORMAL";
+
     @Column(name = "crew_count")
     private Integer crewCount;
 

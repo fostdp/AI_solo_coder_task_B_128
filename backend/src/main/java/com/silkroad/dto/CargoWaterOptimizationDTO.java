@@ -38,4 +38,12 @@ public class CargoWaterOptimizationDTO {
     private String terrainType;
 
     private Double temperatureC;
+
+    private Double actualSpeedKmh;
+
+    private String camelType;
+
+    private String camelTypeName;
+
+    private Double bodyWeightKg;
 }

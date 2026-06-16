@@ -3,11 +3,53 @@ const RouteComparisonPanel = {
     modernRoads: [],
     allComparisons: [],
     displayMode: 'BOTH',
+    roadGradeFilter: 'ALL',
     modes: [
         { value: 'MODERN', label: '按现代公路对比' },
         { value: 'ANCIENT', label: '按古代路线对比' },
         { value: 'ALL', label: '全部对比' }
     ],
+    roadGrades: [
+        { value: 'ALL', label: '全部等级' },
+        { value: 'EXPRESSWAY', label: '高速公路' },
+        { value: 'NATIONAL', label: '国道' },
+        { value: 'PROVINCIAL', label: '省道' },
+        { value: 'INTERNATIONAL', label: '国际通道' }
+    ],
+    roadGradeNames: {
+        'EXPRESSWAY': '高速',
+        'NATIONAL': '国道',
+        'PROVINCIAL': '省道',
+        'INTERNATIONAL': '国际通道',
+        'COUNTY': '县道',
+        'OTHER': '其他'
+    },
+    roadGradeColors: {
+        'EXPRESSWAY': '#ef4444',
+        'NATIONAL': '#f97316',
+        'PROVINCIAL': '#eab308',
+        'INTERNATIONAL': '#a855f7',
+        'COUNTY': '#3b82f6',
+        'OTHER': '#6b7280'
+    },
+    pavementTypes: {
+        'ASPHALT': '沥青路面',
+        'CONCRETE': '水泥路面',
+        'GRAVEL': '砂石路面',
+        'DIRT': '土路'
+    },
+    adminLevels: {
+        'NATIONAL': '国家级',
+        'PROVINCIAL': '省级',
+        'CITY': '市级',
+        'COUNTY': '县级'
+    },
+    mockRoadDetails: {
+        1: { standardCode: 'G30', roadGrade: 'EXPRESSWAY', pavementType: 'ASPHALT', designSpeedKmh: 120, laneWidthM: 3.75, adminLevel: 'NATIONAL', openYear: 2014, standardName: '国家高速公路网规划' },
+        2: { standardCode: 'G7', roadGrade: 'EXPRESSWAY', pavementType: 'ASPHALT', designSpeedKmh: 100, laneWidthM: 3.75, adminLevel: 'NATIONAL', openYear: 2017, standardName: '国家高速公路网规划' },
+        3: { standardCode: 'G314', roadGrade: 'NATIONAL', pavementType: 'ASPHALT', designSpeedKmh: 80, laneWidthM: 3.5, adminLevel: 'NATIONAL', openYear: 1990, standardName: '国道干线公路网规划' },
+        4: { standardCode: 'G315', roadGrade: 'NATIONAL', pavementType: 'ASPHALT', designSpeedKmh: 60, laneWidthM: 3.5, adminLevel: 'NATIONAL', openYear: 1985, standardName: '国道干线公路网规划' }
+    },
 
     init(containerId) {
         this.container = document.getElementById(containerId);
@@ -32,6 +74,12 @@ const RouteComparisonPanel = {
                         <option value="">加载中...</option>
                     </select>
                 </div>
+                <div id="roadGradeFilterSection" class="form-group">
+                    <label>公路等级筛选</label>
+                    <select class="form-control" id="roadGradeFilter">
+                        ${this.roadGrades.map(g => `<option value="${g.value}">${g.label}</option>`).join('')}
+                    </select>
+                </div>
                 <div id="ancientRouteSection" class="form-group hidden">
                     <label>选择古代路线</label>
                     <select class="form-control" id="ancientRouteSelect">
@@ -54,7 +102,15 @@ const RouteComparisonPanel = {
         document.getElementById('compareModeSelect').addEventListener('change', (e) => {
             const mode = e.target.value;
             document.getElementById('modernRoadSection').classList.toggle('hidden', mode !== 'MODERN');
+            document.getElementById('roadGradeFilterSection').classList.toggle('hidden', mode === 'ANCIENT');
             document.getElementById('ancientRouteSection').classList.toggle('hidden', mode !== 'ANCIENT');
+        });
+        document.getElementById('roadGradeFilter').addEventListener('change', (e) => {
+            this.roadGradeFilter = e.target.value;
+            this.filterRoadsByGrade();
+            if (this.allComparisons.length > 0) {
+                this.renderAllComparisonsFiltered();
+            }
         });
         document.getElementById('compareBtn').addEventListener('click', () => {
             const mode = document.getElementById('compareModeSelect').value;
@@ -195,14 +251,62 @@ const RouteComparisonPanel = {
         const water = result.ancientWaterRequiredLiters || result.waterRequired || 0;
         const overlap = (result.routeOverlapPct || result.overlap || 0) * (result.routeOverlapPct <= 1 ? 100 : 1);
         const analysis = result.analysis || result.analyses || [];
+        const roadId = result.id || result.roadId || result.modernRoadId || 1;
+        const roadDetails = result.roadDetails || this.mockRoadDetails[roadId] || this.mockRoadDetails[1];
+        const gradeName = this.roadGradeNames[roadDetails.roadGrade] || roadDetails.roadGrade || '公路';
+        const gradeColor = this.roadGradeColors[roadDetails.roadGrade] || '#6b7280';
+        const pavementName = this.pavementTypes[roadDetails.pavementType] || roadDetails.pavementType || '沥青路面';
+        const adminName = this.adminLevels[roadDetails.adminLevel] || roadDetails.adminLevel || '国家级';
 
         div.innerHTML = `
             <div style="background:#0f172a;padding:12px;border-radius:6px;border-left:4px solid #e94560;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <h4 style="color:#e94560;font-size:0.9rem;">
-                        ${result.ancientRouteName || '古代路线'} ⚔️ ${result.modernRoadName || '现代公路'}
-                    </h4>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <h4 style="color:#e94560;font-size:0.9rem;margin:0;">
+                            ${result.ancientRouteName || '古代路线'} ⚔️ ${result.modernRoadName || '现代公路'}
+                        </h4>
+                        <span style="padding:2px 8px;border-radius:4px;background:${gradeColor}20;color:${gradeColor};font-size:0.7rem;font-weight:600;border:1px solid ${gradeColor};">
+                            ${roadDetails.standardCode || ''}
+                        </span>
+                    </div>
                     <span style="font-size:0.7rem;color:#888;">显示模式: ${this.getDisplayLabel()}</span>
+                </div>
+                <div style="margin-bottom:12px;padding:10px;background:#1a1a2e;border-radius:5px;">
+                    <div style="font-size:0.8rem;color:#e94560;font-weight:600;margin-bottom:8px;">🛣️ 公路标准化信息</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.75rem;">
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:#888;">标准编号:</span>
+                            <span style="color:#e0e0e0;font-weight:500;">${roadDetails.standardCode || '-'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:#888;">公路等级:</span>
+                            <span style="color:${gradeColor};font-weight:500;">${gradeName}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:#888;">路面类型:</span>
+                            <span style="color:#e0e0e0;">${pavementName}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:#888;">设计时速:</span>
+                            <span style="color:#4ade80;font-weight:500;">${roadDetails.designSpeedKmh || '-'} km/h</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:#888;">车道宽度:</span>
+                            <span style="color:#e0e0e0;">${roadDetails.laneWidthM || '-'} m</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:#888;">行政等级:</span>
+                            <span style="color:#e0e0e0;">${adminName}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:#888;">通车年份:</span>
+                            <span style="color:#e0e0e0;">${roadDetails.openYear || '-'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:#888;">标准名称:</span>
+                            <span style="color:#e0e0e0;">${roadDetails.standardName || '-'}</span>
+                        </div>
+                    </div>
                 </div>
                 <div style="margin-bottom:12px;">
                     <div style="font-size:0.8rem;color:#aaa;margin-bottom:4px;">距离对比</div>
@@ -292,11 +396,21 @@ const RouteComparisonPanel = {
         const mName = c.modernRoadName || c.modernName || '现代公路 ' + (index + 1);
         const saved = ancientDist ? ((1 - modernDist / ancientDist) * 100) : 0;
         const color = saved > 40 ? '#4ade80' : saved > 20 ? '#fbbf24' : '#ef4444';
+        const roadId = c.id || c.roadId || (index + 1);
+        const roadDetails = c.roadDetails || this.mockRoadDetails[roadId] || null;
+        let badgeHtml = '';
+        if (roadDetails && roadDetails.standardCode) {
+            const gradeColor = this.roadGradeColors[roadDetails.roadGrade] || '#6b7280';
+            badgeHtml = `<span style="padding:1px 6px;border-radius:3px;background:${gradeColor};color:#fff;font-size:0.65rem;font-weight:700;margin-right:6px;">${roadDetails.standardCode}</span>`;
+        }
         return `
             <div style="background:#0f172a;padding:10px;border-radius:6px;margin-bottom:8px;cursor:pointer;border:1px solid transparent;transition:all 0.2s;"
-                onclick="RouteComparisonPanel.jumpToCompare(${c.id || c.roadId || index})"
+                onclick="RouteComparisonPanel.jumpToCompare(${roadId})"
                 onmouseover="this.style.borderColor='#e94560';" onmouseout="this.style.borderColor='transparent';">
-                <div style="font-weight:600;color:#e0e0e0;font-size:0.85rem;margin-bottom:4px;">${aName} ↔ ${mName}</div>
+                <div style="display:flex;align-items:center;margin-bottom:4px;">
+                    ${badgeHtml}
+                    <div style="font-weight:600;color:#e0e0e0;font-size:0.85rem;flex:1;">${aName} ↔ ${mName}</div>
+                </div>
                 <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#aaa;margin-bottom:4px;">
                     <span>🏛️ ${ancientDist.toFixed(0)}km → 🛣️ ${modernDist.toFixed(0)}km</span>
                     <span style="color:${color};font-weight:500;">${saved.toFixed(0)}%</span>
@@ -367,6 +481,52 @@ const RouteComparisonPanel = {
     getDisplayLabel() {
         const labels = { ANCIENT: '只古代', MODERN: '只现代', BOTH: '双层叠加' };
         return labels[this.displayMode] || this.displayMode;
+    },
+
+    filterRoadsByGrade() {
+        const select = document.getElementById('modernRoadSelect');
+        if (!select || !this.modernRoads.length) return;
+        const filter = this.roadGradeFilter;
+        let roads = this.modernRoads;
+        if (filter !== 'ALL') {
+            roads = this.modernRoads.filter(r => {
+                const roadGrade = r.roadGrade || (this.mockRoadDetails[r.id]?.roadGrade);
+                return roadGrade === filter;
+            });
+        }
+        if (roads.length === 0) {
+            select.innerHTML = '<option value="">暂无符合条件的公路</option>';
+        } else {
+            select.innerHTML = '<option value="">选择公路</option>' + roads.map(r =>
+                `<option value="${r.id || r.roadId}">${r.name || r.roadName || '公路' + r.id} (${(r.distanceKm || 0).toFixed(0)}km)</option>`
+            ).join('');
+        }
+    },
+
+    renderAllComparisonsFiltered() {
+        const div = document.getElementById('allComparisons');
+        if (!div || !this.allComparisons.length) return;
+        let filtered = this.allComparisons;
+        if (this.roadGradeFilter !== 'ALL') {
+            filtered = this.allComparisons.filter(c => {
+                const roadId = c.id || c.roadId;
+                const roadDetails = c.roadDetails || this.mockRoadDetails[roadId];
+                return roadDetails && roadDetails.roadGrade === this.roadGradeFilter;
+            });
+        }
+        if (filtered.length === 0) {
+            div.innerHTML = `
+                <h4 style="font-size:0.85rem;color:#e94560;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #2a2a4a;">所有路线对比</h4>
+                <div class="empty-state">暂无符合条件的路线</div>
+            `;
+            return;
+        }
+        div.innerHTML = `
+            <h4 style="font-size:0.85rem;color:#e94560;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #2a2a4a;">所有路线对比 (${filtered.length}条)</h4>
+            <div style="max-height:300px;overflow-y:auto;">
+                ${filtered.slice(0, 10).map((c, i) => this.renderComparisonListItem(c, i)).join('')}
+            </div>
+        `;
     }
 };
 

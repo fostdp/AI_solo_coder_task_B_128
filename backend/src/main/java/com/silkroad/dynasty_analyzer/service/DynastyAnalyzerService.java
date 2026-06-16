@@ -2,8 +2,14 @@ package com.silkroad.dynasty_analyzer.service;
 
 import com.silkroad.dto.DynastyComparisonDTO;
 import com.silkroad.dto.DynastyRouteDTO;
+import com.silkroad.entity.ArchaeologicalSite;
 import com.silkroad.entity.DynastyRoute;
+import com.silkroad.entity.DynastyRouteSource;
+import com.silkroad.entity.HistoricalSource;
+import com.silkroad.repository.ArchaeologicalSiteRepository;
 import com.silkroad.repository.DynastyRouteRepository;
+import com.silkroad.repository.DynastyRouteSourceRepository;
+import com.silkroad.repository.HistoricalSourceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Coordinate;
@@ -19,6 +25,24 @@ import java.util.stream.Collectors;
 public class DynastyAnalyzerService {
 
     private final DynastyRouteRepository dynastyRouteRepository;
+    private final ArchaeologicalSiteRepository archaeologicalSiteRepository;
+    private final HistoricalSourceRepository historicalSourceRepository;
+    private final DynastyRouteSourceRepository dynastyRouteSourceRepository;
+
+    public List<ArchaeologicalSite> getArchaeologicalSitesByDynasty(String dynasty) {
+        return archaeologicalSiteRepository.findByDynasty(dynasty);
+    }
+
+    public List<HistoricalSource> getHistoricalSourcesByRoute(Long routeId) {
+        List<DynastyRouteSource> routeSources = dynastyRouteSourceRepository.findByRouteId(routeId);
+        List<Long> sourceIds = routeSources.stream()
+                .map(DynastyRouteSource::getSourceId)
+                .collect(Collectors.toList());
+        if (sourceIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return historicalSourceRepository.findAllById(sourceIds);
+    }
 
     public List<DynastyComparisonDTO> getAllDynasties() {
         List<DynastyRoute> allRoutes = dynastyRouteRepository.findAll();
@@ -83,6 +107,11 @@ public class DynastyAnalyzerService {
                 .politicalStability(entity.getPoliticalStability())
                 .tradeVolumeScore(entity.getTradeVolumeScore())
                 .culturalExchangeScore(entity.getCulturalExchangeScore())
+                .evidenceStrength(entity.getEvidenceStrength())
+                .historicalSources(entity.getHistoricalSources())
+                .archaeologicalNote(entity.getArchaeologicalNote())
+                .routeQuality(entity.getRouteQuality())
+                .numArchaeologicalSites(entity.getNumArchaeologicalSites())
                 .coordinates(coordinates)
                 .build();
     }

@@ -12,7 +12,22 @@ const SilkRoadMap = {
         dynastyRoutes: {},
         modernRoads: {},
         ancientVsModern: {},
-        virtualCaravans: {}
+        virtualCaravans: {},
+        archaeologicalSites: {}
+    },
+    _archaeologicalTypeIcons: {
+        'CITY': '🏯',
+        'GROTTO': '🛕',
+        'STATION': '📯',
+        'PASS': '🏰',
+        'TOMB': '⚱️'
+    },
+    _archaeologicalTypeNames: {
+        'CITY': '城址',
+        'GROTTO': '石窟',
+        'STATION': '驿站',
+        'PASS': '关隘',
+        'TOMB': '墓葬'
     },
     caravansData: [],
     _heatmapLayers: {
@@ -497,8 +512,77 @@ const SilkRoadMap = {
         this.layers.virtualCaravans = {};
     },
 
+    showArchaeologicalSites(sites) {
+        this.clearArchaeologicalSites();
+        if (!sites || sites.length === 0) return;
+        sites.forEach(site => {
+            if (!site.lat || !site.lng) return;
+            const strength = site.evidenceStrength || 50;
+            const type = site.type || 'CITY';
+            const icon = this._archaeologicalTypeIcons[type] || '🏛️';
+            const color = strength >= 85 ? '#4ade80' : strength >= 60 ? '#fbbf24' : '#ef4444';
+            const typeName = this._archaeologicalTypeNames[type] || type;
+            const size = 36;
+            const markerIcon = L.divIcon({
+                className: 'archaeological-marker',
+                html: `<div style="
+                    width:${size}px;height:${size}px;
+                    display:flex;align-items:center;justify-content:center;
+                    font-size:20px;
+                    background:${color}20;
+                    border:2px solid ${color};
+                    border-radius:50%;
+                    box-shadow:0 0 10px ${color}60;
+                    cursor:pointer;
+                    transition:transform 0.2s;
+                " onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
+                    ${icon}
+                </div>`,
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2]
+            });
+            const popupContent = `
+                <div style="min-width:200px;">
+                    <h3 style="color:${color};margin:0 0 8px 0;font-size:1rem;">${icon} ${site.name || '考古遗址'}</h3>
+                    <div style="font-size:0.85rem;color:#ccc;line-height:1.6;">
+                        <p style="margin:4px 0;"><strong>类型:</strong> ${typeName}</p>
+                        <p style="margin:4px 0;"><strong>朝代:</strong> ${site.dynasty || site.dynastyName || '-'}</p>
+                        <p style="margin:4px 0;"><strong>发现年份:</strong> ${site.discoveryYear || '-'}</p>
+                        <p style="margin:4px 0;"><strong>证据强度:</strong> 
+                            <span style="color:${color};font-weight:600;">${strength}%</span>
+                        </p>
+                        <div style="height:6px;background:#2a2a4a;border-radius:3px;overflow:hidden;margin:6px 0;">
+                            <div style="height:100%;width:${strength}%;background:${color};"></div>
+                        </div>
+                        <p style="margin:8px 0 0 0;color:#aaa;font-size:0.8rem;line-height:1.5;">
+                            ${site.description || ''}
+                        </p>
+                    </div>
+                </div>
+            `;
+            const marker = L.marker([site.lat, site.lng], { icon: markerIcon })
+                .bindPopup(popupContent);
+            this.layers.archaeologicalSites[site.id || site.name || Math.random()] = marker;
+            marker.addTo(this.map);
+        });
+        try {
+            const group = L.featureGroup(Object.values(this.layers.archaeologicalSites));
+            this.map.fitBounds(group.getBounds().pad(0.2));
+        } catch (e) {}
+    },
+
+    clearArchaeologicalSites() {
+        Object.values(this.layers.archaeologicalSites).forEach(layer => {
+            this.map.removeLayer(layer);
+        });
+        this.layers.archaeologicalSites = {};
+    },
+
     clearFeatureOverlays(currentTab) {
-        if (currentTab !== 'dynasty') this.clearDynastyRoutes();
+        if (currentTab !== 'dynasty') {
+            this.clearDynastyRoutes();
+            this.clearArchaeologicalSites();
+        }
         if (currentTab !== 'compare') this.clearAncientVsModern();
         if (currentTab !== 'virtual') this.clearVirtualCaravan();
     }

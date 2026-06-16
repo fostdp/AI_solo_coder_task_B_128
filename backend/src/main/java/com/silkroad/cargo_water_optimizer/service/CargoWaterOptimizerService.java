@@ -1,7 +1,9 @@
 package com.silkroad.cargo_water_optimizer.service;
 
 import com.silkroad.dto.CargoWaterOptimizationDTO;
+import com.silkroad.entity.CamelType;
 import com.silkroad.entity.CargoWaterConfig;
+import com.silkroad.repository.CamelTypeRepository;
 import com.silkroad.repository.CargoWaterConfigRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,17 +20,43 @@ import java.util.Map;
 public class CargoWaterOptimizerService {
 
     private final CargoWaterConfigRepository cargoWaterConfigRepository;
+    private final CamelTypeRepository camelTypeRepository;
 
     private static final String GENERAL_CARGO_TYPE = "GENERAL";
+    private static final String DEFAULT_CAMEL_TYPE = "BACTRIAN";
+
+    public List<CamelType> getAllCamelTypes() {
+        return camelTypeRepository.findAll();
+    }
 
     public CargoWaterOptimizationDTO optimize(String cargoType, Integer camelCount, Integer crewCount,
                                                Double cargoWeightKg, String terrainType, Double temperatureC) {
-        CargoWaterConfig config = getConfig(cargoType);
+        return optimize(cargoType, camelCount, crewCount, cargoWeightKg, terrainType, temperatureC, null);
+    }
 
-        double optimalCargoKg = camelCount * config.getOptimalCargoPerCamelKg();
-        double maxCargoKg = camelCount * config.getMaxCargoPerCamelKg();
+    public CargoWaterOptimizationDTO optimize(String cargoType, Integer camelCount, Integer crewCount,
+                                               Double cargoWeightKg, String terrainType, Double temperatureC,
+                                               String camelType) {
+        CargoWaterConfig config = getConfig(cargoType);
+        CamelType camel = getCamelType(camelType);
+
+        double avgBodyWeightKg = camel.getAvgBodyWeightKg() != null ? camel.getAvgBodyWeightKg() : 500.0;
+        double optimalLoadRatio = camel.getOptimalLoadRatio() != null ? camel.getOptimalLoadRatio() : 0.3;
+        double maxLoadRatio = camel.getMaxLoadRatio() != null ? camel.getMaxLoadRatio() : 0.4;
+        double baseSpeedKmh = camel.getBaseSpeedKmh() != null ? camel.getBaseSpeedKmh() : 4.0;
+        double loadSpeedDecayFactor = camel.getLoadSpeedDecayFactor() != null ? camel.getLoadSpeedDecayFactor() : 0.001;
+        double baseWaterPerKgBody = camel.getBaseWaterPerKgBody() != null ? camel.getBaseWaterPerKgBody() : 0.08;
+
+        double optimalCargoKg = camelCount * avgBodyWeightKg * optimalLoadRatio;
+        double maxCargoKg = camelCount * avgBodyWeightKg * maxLoadRatio;
+
+        double actualSpeedKmh = baseSpeedKmh * (1 - loadSpeedDecayFactor * cargoWeightKg);
+        if (actualSpeedKmh < 0) {
+            actualSpeedKmh = 0;
+        }
+
         double dailyWaterConsumption = calculateDailyWaterConsumption(
-                config, camelCount, crewCount, cargoWeightKg, terrainType, temperatureC);
+                config, camel, camelCount, crewCount, cargoWeightKg, terrainType, temperatureC);
 
         double cargoWaterRatio = cargoWeightKg > 0 && dailyWaterConsumption > 0
                 ? cargoWeightKg / dailyWaterConsumption
@@ -38,7 +66,7 @@ public class CargoWaterOptimizerService {
         double recommendedWaterCapacity = dailyWaterConsumption * 7;
 
         String suggestion = generateSuggestion(cargoWeightKg, optimalCargoKg, maxCargoKg,
-                terrainType, temperatureC, dailyWaterConsumption, cargoWaterRatio);
+                terrainType, temperatureC, dailyWaterConsumption, cargoWaterRatio, camel);
 
         return CargoWaterOptimizationDTO.builder()
                 .cargoType(config.getCargoType())
@@ -55,7 +83,43 @@ public class CargoWaterOptimizerService {
                 .suggestion(suggestion)
                 .terrainType(terrainType)
                 .temperatureC(temperatureC)
+                .actualSpeedKmh(actualSpeedKmh)
+                .camelType(camel.getTypeCode())
+                .camelTypeName(camel.getTypeName())
+                .bodyWeightKg(avgBodyWeightKg)
                 .build();
+    }
+
+    private CamelType getCamelType(String camelTypeCode) {
+        if (camelTypeCode == null || camelTypeCode.isEmpty()) {
+            return camelTypeRepository.findByTypeCode(DEFAULT_CAMEL_TYPE)
+                    .orElseGet(this::createDefaultCamelType);
+        }
+        return camelTypeRepository.findByTypeCode(camelTypeCode)
+                .orElseGet(() -> camelTypeRepository.findByTypeCode(DEFAULT_CAMEL_TYPE)
+                        .orElseGet(this::createDefaultCamelType));
+    }
+
+    private CamelType createDefaultCamelType() {
+        CamelType camel = new CamelType();
+        camel.setTypeCode(DEFAULT_CAMEL_TYPE);
+        camel.setTypeName("双峰驼");
+        camel.setTypeNameEn("Bactrian Camel");
+        camel.setAvgBodyWeightKg(500.0);
+        camel.setBodyHeightM(2.1);
+        camel.setOptimalLoadRatio(0.3);
+        camel.setMaxLoadRatio(0.4);
+        camel.setBaseWaterPerKgBody(0.08);
+        camel.setWaterTempCoefficient(0.02);
+        camel.setBaseSpeedKmh(4.0);
+        camel.setLoadSpeedDecayFactor(0.001);
+        camel.setHeatResistanceScore(6.0);
+        camel.setColdResistanceScore(9.0);
+        camel.setStaminaScore(8.0);
+        camel.setDailyDistanceKm(30.0);
+        camel.setDescription("双峰驼适合低温沙漠环境，耐寒能力强，是丝绸之路上的主要驮运工具");
+        camel.setOriginRegion("中亚");
+        return camel;
     }
 
     public List<CargoWaterConfig> getAllCargoConfigs() {
@@ -65,10 +129,18 @@ public class CargoWaterOptimizerService {
     public List<Map<String, Object>> simulateWaterConsumption(String cargoType, Integer camelCount,
                                                                Integer crewCount, Double cargoWeightKg,
                                                                Integer days, String terrainType, Double temperatureC) {
+        return simulateWaterConsumption(cargoType, camelCount, crewCount, cargoWeightKg, days, terrainType, temperatureC, null);
+    }
+
+    public List<Map<String, Object>> simulateWaterConsumption(String cargoType, Integer camelCount,
+                                                               Integer crewCount, Double cargoWeightKg,
+                                                               Integer days, String terrainType, Double temperatureC,
+                                                               String camelType) {
         List<Map<String, Object>> result = new ArrayList<>();
         CargoWaterConfig config = getConfig(cargoType);
+        CamelType camel = getCamelType(camelType);
         double dailyWater = calculateDailyWaterConsumption(
-                config, camelCount, crewCount, cargoWeightKg, terrainType, temperatureC);
+                config, camel, camelCount, crewCount, cargoWeightKg, terrainType, temperatureC);
         double cumulativeWater = 0.0;
 
         for (int i = 1; i <= days; i++) {
@@ -105,13 +177,20 @@ public class CargoWaterOptimizerService {
         return config;
     }
 
-    private double calculateDailyWaterConsumption(CargoWaterConfig config, Integer camelCount,
-                                                   Integer crewCount, Double cargoWeightKg,
-                                                   String terrainType, Double temperatureC) {
+    private double calculateDailyWaterConsumption(CargoWaterConfig config, CamelType camel,
+                                                   Integer camelCount, Integer crewCount,
+                                                   Double cargoWeightKg, String terrainType,
+                                                   Double temperatureC) {
         double terrainFactor = getTerrainFactor(config, terrainType);
-        double temperatureFactor = 1 + config.getTemperatureFactorPerDegree() * (temperatureC - 25);
+        double waterTempCoefficient = camel.getWaterTempCoefficient() != null
+                ? camel.getWaterTempCoefficient()
+                : config.getTemperatureFactorPerDegree();
+        double temperatureFactor = 1 + waterTempCoefficient * (temperatureC - 25);
 
-        double camelWater = camelCount * config.getCamelBaseWaterDailyL();
+        double avgBodyWeightKg = camel.getAvgBodyWeightKg() != null ? camel.getAvgBodyWeightKg() : 500.0;
+        double baseWaterPerKgBody = camel.getBaseWaterPerKgBody() != null ? camel.getBaseWaterPerKgBody() : 0.08;
+
+        double camelWater = camelCount * avgBodyWeightKg * baseWaterPerKgBody;
         double crewWater = crewCount * config.getCrewBaseWaterDailyL();
         double cargoWater = (cargoWeightKg / 100) * config.getWaterPer100kgPerDayLiters();
 
@@ -142,8 +221,13 @@ public class CargoWaterOptimizerService {
 
     private String generateSuggestion(Double cargoWeightKg, Double optimalCargoKg, Double maxCargoKg,
                                        String terrainType, Double temperatureC,
-                                       double dailyWaterConsumption, double cargoWaterRatio) {
+                                       double dailyWaterConsumption, double cargoWaterRatio,
+                                       CamelType camel) {
         List<String> suggestions = new ArrayList<>();
+
+        if (camel != null && camel.getDescription() != null) {
+            suggestions.add(camel.getDescription());
+        }
 
         if (cargoWeightKg > maxCargoKg) {
             double overMaxPct = (cargoWeightKg - maxCargoKg) / maxCargoKg * 100;

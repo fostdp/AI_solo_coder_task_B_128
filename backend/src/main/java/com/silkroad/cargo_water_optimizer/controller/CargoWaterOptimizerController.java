@@ -4,6 +4,7 @@ import com.silkroad.cargo_water_optimizer.service.CargoWaterOptimizerService;
 import com.silkroad.dto.CargoWaterOptimizationDTO;
 import com.silkroad.dto.CargoWaterOptimizeRequest;
 import com.silkroad.dto.CargoWaterSimulateRequest;
+import com.silkroad.entity.CamelType;
 import com.silkroad.entity.CargoWaterConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +24,11 @@ public class CargoWaterOptimizerController {
         return cargoWaterOptimizerService.getAllCargoConfigs();
     }
 
+    @GetMapping("/camel-types")
+    public List<CamelType> getAllCamelTypes() {
+        return cargoWaterOptimizerService.getAllCamelTypes();
+    }
+
     @PostMapping("/optimize")
     public CargoWaterOptimizationDTO optimize(@RequestBody CargoWaterOptimizeRequest request) {
         String terrainType = request.getTerrainType() != null ? request.getTerrainType() : "DESERT";
@@ -34,7 +40,8 @@ public class CargoWaterOptimizerController {
                 request.getCrewCount(),
                 request.getCargoWeightKg(),
                 terrainType,
-                temperatureC
+                temperatureC,
+                request.getCamelType()
         );
     }
 
@@ -50,7 +57,8 @@ public class CargoWaterOptimizerController {
                 request.getCargoWeightKg(),
                 request.getDays(),
                 terrainType,
-                temperatureC
+                temperatureC,
+                request.getCamelType()
         );
     }
 }

@@ -58,6 +58,21 @@ public class DynastyRoute {
     @Column(name = "cultural_exchange_score")
     private Double culturalExchangeScore;
 
+    @Column(name = "evidence_strength")
+    private Double evidenceStrength;
+
+    @Column(name = "historical_sources", columnDefinition = "text")
+    private String historicalSources;
+
+    @Column(name = "archaeological_note", columnDefinition = "text")
+    private String archaeologicalNote;
+
+    @Column(name = "route_quality")
+    private String routeQuality;
+
+    @Column(name = "num_archaeological_sites")
+    private Integer numArchaeologicalSites;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

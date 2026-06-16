@@ -2,6 +2,7 @@ const CargoWaterPanel = {
     container: null,
     configs: [],
     _throttleTimer: null,
+    currentCamelType: 'BACTRIAN',
     cargoNames: {
         'SILK': '丝绸',
         'SPICE': '香料',
@@ -20,6 +21,63 @@ const CargoWaterPanel = {
         'PLATEAU': '高原',
         'GOBI': '戈壁'
     },
+    camelTypes: {
+        'BACTRIAN': {
+            name: '双峰驼',
+            weightKg: 600,
+            loadRatio: 0.35,
+            emptySpeedKmh: 5.0,
+            heatResistance: 75,
+            coldResistance: 90,
+            endurance: 85,
+            speedDropPer100kg: 0.4,
+            description: '中亚双峰驼，耐寒耐旱，适合长途跋涉'
+        },
+        'DROMEDARY': {
+            name: '单峰驼',
+            weightKg: 500,
+            loadRatio: 0.30,
+            emptySpeedKmh: 6.5,
+            heatResistance: 95,
+            coldResistance: 50,
+            endurance: 70,
+            speedDropPer100kg: 0.5,
+            description: '阿拉伯单峰驼，速度快，耐热性极佳'
+        },
+        'HYBRID': {
+            name: '杂交驼',
+            weightKg: 700,
+            loadRatio: 0.40,
+            emptySpeedKmh: 4.5,
+            heatResistance: 80,
+            coldResistance: 75,
+            endurance: 90,
+            speedDropPer100kg: 0.3,
+            description: '双峰与单峰杂交，体力强壮，耐力出众'
+        },
+        'WILD_BACTRIAN': {
+            name: '野双峰驼',
+            weightKg: 550,
+            loadRatio: 0.25,
+            emptySpeedKmh: 7.0,
+            heatResistance: 85,
+            coldResistance: 95,
+            endurance: 75,
+            speedDropPer100kg: 0.6,
+            description: '野生双峰驼，警觉性高，适应极端环境'
+        },
+        'PACK_SMALL': {
+            name: '小型驮队驼',
+            weightKg: 400,
+            loadRatio: 0.28,
+            emptySpeedKmh: 5.5,
+            heatResistance: 70,
+            coldResistance: 80,
+            endurance: 80,
+            speedDropPer100kg: 0.45,
+            description: '体型较小，灵活敏捷，适合山地小道'
+        }
+    },
 
     init(containerId) {
         this.container = document.getElementById(containerId);
@@ -32,6 +90,17 @@ const CargoWaterPanel = {
         this.container.innerHTML = `
             <div class="panel">
                 <h2>🐪 载重与水源消耗优化</h2>
+                <div class="form-group">
+                    <label>骆驼种类</label>
+                    <select class="form-control" id="camelTypeSelect">
+                        ${Object.entries(this.camelTypes).map(([code, info]) => 
+                            `<option value="${code}">${info.name} (${info.weightKg}kg)</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div id="camelBioSection" style="margin-bottom:12px;">
+                    ${this.renderCamelBio()}
+                </div>
                 <div class="form-group">
                     <label>货物类型</label>
                     <select class="form-control" id="cargoTypeSelect">
@@ -80,6 +149,11 @@ const CargoWaterPanel = {
             document.getElementById('tempLabel').textContent = e.target.value;
             this.scheduleAnalyze();
         });
+        document.getElementById('camelTypeSelect').addEventListener('change', (e) => {
+            this.currentCamelType = e.target.value;
+            this.updateCamelBio();
+            this.scheduleAnalyze();
+        });
         ['cargoTypeSelect', 'camelCount', 'crewCount', 'cargoWeight', 'terrainTypeSelect'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', () => this.scheduleAnalyze());
@@ -120,6 +194,7 @@ const CargoWaterPanel = {
 
     getFormData() {
         return {
+            camelType: document.getElementById('camelTypeSelect').value || 'BACTRIAN',
             cargoType: document.getElementById('cargoTypeSelect').value || 'GENERAL',
             camelCount: parseInt(document.getElementById('camelCount').value) || 0,
             crewCount: parseInt(document.getElementById('crewCount').value) || 0,
@@ -145,13 +220,17 @@ const CargoWaterPanel = {
     },
 
     renderFallbackResult(data) {
-        const camelCapacity = 200;
+        const camelInfo = this.camelTypes[data.camelType] || this.camelTypes.BACTRIAN;
+        const camelCapacity = camelInfo.weightKg * camelInfo.loadRatio;
         const maxLoad = data.camelCount * camelCapacity;
         const dailyCamelWater = 40;
         const dailyCrewWater = 3;
         const tempFactor = data.temperatureC > 30 ? 1.5 : data.temperatureC < 0 ? 0.8 : 1;
         const dailyWater = (data.camelCount * dailyCamelWater + data.crewCount * dailyCrewWater) * tempFactor;
         const loadRatio = Math.min(100, (data.cargoWeightKg / maxLoad) * 100);
+        const emptySpeed = camelInfo.emptySpeedKmh;
+        const speedDrop = (data.cargoWeightKg / 100) * camelInfo.speedDropPer100kg;
+        const currentSpeed = Math.max(1, emptySpeed - speedDrop);
 
         this.renderResult({
             optimalLoadKg: maxLoad * 0.8,
@@ -161,6 +240,9 @@ const CargoWaterPanel = {
             dailyWaterConsumptionLiters: dailyWater,
             efficiencyRatio: data.cargoWeightKg / Math.max(dailyWater, 1),
             recommendedWaterCapacityLiters: dailyWater * 15,
+            emptySpeedKmh: emptySpeed,
+            currentSpeedKmh: currentSpeed,
+            speedDropPer100kg: camelInfo.speedDropPer100kg,
             suggestionLevel: loadRatio > 95 ? 'DANGER' : loadRatio > 80 ? 'WARNING' : 'SAFE',
             suggestions: [
                 loadRatio > 95 ? '⚠️ 载重接近上限，请减少货物或增加骆驼' :
@@ -188,6 +270,10 @@ const CargoWaterPanel = {
         const level = result.suggestionLevel || 'SAFE';
         const levelColors = { SAFE: '#4ade80', WARNING: '#fbbf24', DANGER: '#ef4444' };
         const color = levelColors[level] || '#4ade80';
+        const emptySpeed = result.emptySpeedKmh || 5;
+        const currentSpeed = result.currentSpeedKmh || emptySpeed;
+        const speedDrop = result.speedDropPer100kg || 0.4;
+        const camelInfo = this.camelTypes[data.camelType] || this.camelTypes.BACTRIAN;
 
         div.innerHTML = `
             <div style="background:#0f172a;padding:12px;border-radius:6px;margin-bottom:10px;">
@@ -205,6 +291,22 @@ const CargoWaterPanel = {
                     <div style="display:flex;justify-content:space-between;font-size:0.7rem;margin-top:4px;">
                         <span style="color:#4ade80;">最优 ${optimal.toFixed(0)}kg</span>
                         <span style="color:#888;">地形: ${this.terrainNames[data.terrainType] || data.terrainType}</span>
+                    </div>
+                </div>
+                <div style="margin-bottom:12px;padding:10px;background:#1a1a2e;border-radius:5px;">
+                    <div style="font-size:0.8rem;color:#e94560;font-weight:600;margin-bottom:8px;">🏃 速度分析</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                        <div style="text-align:center;">
+                            <div style="font-size:0.7rem;color:#aaa;margin-bottom:2px;">空载速度</div>
+                            <div style="font-size:1.2rem;color:#4ade80;font-weight:700;">${emptySpeed.toFixed(1)}<span style="font-size:0.7rem;color:#888;"> km/h</span></div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-size:0.7rem;color:#aaa;margin-bottom:2px;">当前速度</div>
+                            <div style="font-size:1.2rem;color:#fbbf24;font-weight:700;">${currentSpeed.toFixed(1)}<span style="font-size:0.7rem;color:#888;"> km/h</span></div>
+                        </div>
+                    </div>
+                    <div style="font-size:0.7rem;color:#888;text-align:center;line-height:1.4;">
+                        📊 载重每增加 100kg，速度降低 ${speedDrop} km/h
                     </div>
                 </div>
                 <div class="stat-row" style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:0.85rem;">
@@ -290,6 +392,50 @@ const CargoWaterPanel = {
                 </div>
             </div>
         `;
+    },
+
+    renderCamelBio() {
+        const camelInfo = this.camelTypes[this.currentCamelType] || this.camelTypes.BACTRIAN;
+        return `
+            <div style="background:#0f172a;padding:10px;border-radius:6px;border-left:3px solid #fbbf24;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <div style="font-size:0.85rem;font-weight:600;color:#fbbf24;">🐪 ${camelInfo.name}</div>
+                    <div style="font-size:0.7rem;color:#888;">${camelInfo.weightKg}kg</div>
+                </div>
+                <div style="font-size:0.75rem;color:#aaa;margin-bottom:8px;line-height:1.4;">${camelInfo.description}</div>
+                <div style="display:flex;justify-content:space-around;">
+                    ${this.renderBioCircle('🔥 耐热', camelInfo.heatResistance, '#ef4444')}
+                    ${this.renderBioCircle('❄️ 耐寒', camelInfo.coldResistance, '#60a5fa')}
+                    ${this.renderBioCircle('💪 耐力', camelInfo.endurance, '#10b981')}
+                </div>
+            </div>
+        `;
+    },
+
+    renderBioCircle(label, value, color) {
+        const v = Math.min(100, Math.max(0, value));
+        const radius = 18;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference - (v / 100) * circumference;
+        return `
+            <div style="text-align:center;">
+                <svg width="48" height="48" viewBox="0 0 48 48">
+                    <circle cx="24" cy="24" r="${radius}" fill="none" stroke="#2a2a4a" stroke-width="4"/>
+                    <circle cx="24" cy="24" r="${radius}" fill="none" stroke="${color}" stroke-width="4"
+                        stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
+                        stroke-linecap="round" transform="rotate(-90 24 24)"/>
+                    <text x="24" y="28" text-anchor="middle" fill="${color}" font-size="11" font-weight="600">${v.toFixed(0)}</text>
+                </svg>
+                <div style="font-size:0.65rem;color:#888;margin-top:2px;">${label}</div>
+            </div>
+        `;
+    },
+
+    updateCamelBio() {
+        const div = document.getElementById('camelBioSection');
+        if (div) {
+            div.innerHTML = this.renderCamelBio();
+        }
     }
 };
 
