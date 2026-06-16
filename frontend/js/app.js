@@ -19,16 +19,16 @@ const App = {
 
     initializeNewModules() {
         try {
-            if (window.DynastyPanel) DynastyPanel.init('dynastyPanelContainer');
+            if (window.RouteEvolutionPanel) RouteEvolutionPanel.init('dynastyPanelContainer');
         } catch (e) { console.warn('朝代面板初始化失败:', e); }
         try {
-            if (window.CargoWaterPanel) CargoWaterPanel.init('cargoWaterPanelContainer');
+            if (window.LoadOptimizerPanel) LoadOptimizerPanel.init('cargoWaterPanelContainer');
         } catch (e) { console.warn('载重优化面板初始化失败:', e); }
         try {
-            if (window.RouteComparisonPanel) RouteComparisonPanel.init('routeComparisonPanelContainer', this.routes);
+            if (window.RouteComparatorPanel) RouteComparatorPanel.init('routeComparisonPanelContainer', this.routes);
         } catch (e) { console.warn('古今对比面板初始化失败:', e); }
         try {
-            if (window.VirtualCaravanPanel) VirtualCaravanPanel.init('virtualCaravanPanelContainer', this.routes);
+            if (window.VrCaravanPanel) VrCaravanPanel.init('virtualCaravanPanelContainer', this.routes);
         } catch (e) { console.warn('虚拟旅行面板初始化失败:', e); }
     },
 

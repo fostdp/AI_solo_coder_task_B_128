@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/pathfinding")
@@ -19,12 +20,12 @@ public class PlannerPathfindingController {
     private final PlannerPathfindingService pathfindingService;
 
     @PostMapping("/plan")
-    public PathResult planPath(@RequestBody PathRequest request) {
+    public CompletableFuture<PathResult> planPath(@RequestBody PathRequest request) {
         return pathfindingService.findOptimalPath(request);
     }
 
     @GetMapping("/quick")
-    public PathResult quickPlan(
+    public CompletableFuture<PathResult> quickPlan(
             @RequestParam double startLng,
             @RequestParam double startLat,
             @RequestParam double endLng,

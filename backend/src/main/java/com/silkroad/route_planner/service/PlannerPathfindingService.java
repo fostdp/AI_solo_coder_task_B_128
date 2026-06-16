@@ -10,9 +10,11 @@ import com.silkroad.repository.TerrainGridRepository;
 import com.silkroad.repository.WaterSourceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -46,7 +48,8 @@ public class PlannerPathfindingService {
     private static final double GENETIC_CROSSOVER_RATE = 0.7;
     private static final double OASIS_BONUS_THRESHOLD = 50.0;
 
-    public PathResult findOptimalPath(PathRequest request) {
+    @Async("pathfindingExecutor")
+    public CompletableFuture<PathResult> findOptimalPath(PathRequest request) {
         long startTime = System.currentTimeMillis();
         Season season = Season.fromCode(request.getSeason());
 
@@ -96,7 +99,7 @@ public class PlannerPathfindingService {
 
         long computationTime = System.currentTimeMillis() - startTime;
 
-        return PathResult.builder()
+        return CompletableFuture.completedFuture(PathResult.builder()
                 .pathPoints(finalResult.getPathPoints())
                 .totalDistanceKm(finalResult.getTotalDistanceKm())
                 .estimatedHours(finalResult.getEstimatedHours())
@@ -106,7 +109,7 @@ public class PlannerPathfindingService {
                 .waterRequiredLiters(finalResult.getWaterRequiredLiters())
                 .algorithmUsed(algorithmUsed)
                 .computationTimeMs(computationTime)
-                .build();
+                .build());
     }
 
     private boolean shouldUseGeneticResult(PathResult aStarResult, PathResult geneticResult) {
